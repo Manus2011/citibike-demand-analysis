@@ -23,7 +23,6 @@ Pre-position bikes at high-outflow residential stations before 7am on weekdays. 
 - Tableau — dashboard visualization
 
 ## Files
-## Files
 - `citibike_analysis.py` — end-to-end pipeline: loads data, cleans, analyzes, builds SQLite DB, runs 5 business queries, exports CSVs and charts
 - `citibike_station_summary.csv` — 2,169 stations with outflow metrics
 - `citibike_problem_stations.csv` — 15 high-priority stations
