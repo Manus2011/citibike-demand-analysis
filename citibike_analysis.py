@@ -16,7 +16,7 @@ HOW TO RUN:
 
 import glob
 import warnings
-
+import sqlite3
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -199,12 +199,17 @@ print(top5_peak[['start_station_name','peak_departures','peak_net_outflow','peak
 monthly = df.groupby(['month','month_label']).agg(
     trips = ('ride_id', 'count')
 ).reset_index().sort_values('month')
+monthly = monthly[monthly['month'] != 12]
 
-top_station_name = station_summary.iloc[0]['start_station_name']
+top_station_name = (station_summary[station_summary['total_trips'] > 20000]
+                    .assign(score=lambda x: x['peak_outflow_rate'] * x['total_trips'])
+                    .nlargest(1, 'score')
+                    .iloc[0]['start_station_name'])
 top_station_df   = df[df['start_station_name'] == top_station_name]
 monthly_top = top_station_df.groupby(['month','month_label']).agg(
     trips = ('ride_id','count')
 ).reset_index().sort_values('month')
+monthly_top = monthly_top[monthly_top['month'] != 12]
 
 print(f"\n=== MONTHLY TRIP TREND: {top_station_name} ===")
 print(monthly_top.to_string(index=False))
@@ -253,8 +258,8 @@ ax = axes[0, 1]
 plot_data = station_summary.head(30).dropna(subset=['rebalancing_cost','total_trips'])
 sc = ax.scatter(plot_data['total_trips'] / 1000,
                 plot_data['rebalancing_cost'] / 1000,
-                c=plot_data['peak_outflow_rate'].fillna(0),
-                cmap='RdYlGn_r', s=60, alpha=0.8)
+                c=plot_data['peak_outflow_rate'].fillna(0).clip(lower=0),
+                cmap='RdYlGn_r', s=60, alpha=0.8, vmin=0, vmax=0.75)
 plt.colorbar(sc, ax=ax, label='Peak Outflow Rate')
 ax.set_xlabel('Total Trips (thousands)', fontsize=10)
 ax.set_ylabel('Estimated Rebalancing Cost ($K)', fontsize=10)
@@ -289,6 +294,8 @@ ax2.plot(top_x, monthly_top['trips'], color=ALERT_RED, marker='o', linewidth=2.5
          label=top_station_name[:20]+'...', markersize=6)
 ax.set_xticks(x)
 ax.set_xticklabels(month_labels)
+ax.set_xlim(-0.5, len(monthly) - 0.5)
+ax2.set_xlim(-0.5, len(monthly) - 0.5)
 ax.set_ylabel('System Total Trips (thousands)', fontsize=9, color=CITIBIKE_BLUE)
 ax2.set_ylabel(f'Top Station Trips', fontsize=9, color=ALERT_RED)
 ax.set_title('Monthly Ridership: System vs. Top Station', fontweight='bold')
@@ -312,5 +319,64 @@ export = station_summary[[
 ]].copy()
 export.to_csv('citibike_station_summary.csv', index=False)
 print("Saved: citibike_station_summary.csv")
+# =============================================================================
+# 10. SQLITE DATABASE + BUSINESS QUERIES
+# =============================================================================
+print("\nBuilding SQLite database...")
+conn = sqlite3.connect('citibike.db')
+export.to_sql('station_summary', conn, if_exists='replace', index=False)
+
+problem_stations = export[
+    (export['total_trips'] > 20000) & (export['peak_outflow_rate'] > 0)
+].sort_values('peak_outflow_rate', ascending=False).head(15)
+problem_stations.to_sql('problem_stations', conn, if_exists='replace', index=False)
+problem_stations.to_csv('citibike_problem_stations.csv', index=False)
+print("Saved: citibike_problem_stations.csv")
+
+queries = {
+    "Q1: Top 15 stations by morning rush outflow rate": """
+        SELECT start_station_name, total_trips, peak_departures,
+               ROUND(peak_outflow_rate * 100, 1) as outflow_pct,
+               ROUND(rebalancing_cost, 0) as rebalancing_cost_usd
+        FROM station_summary
+        WHERE total_trips > 20000 AND peak_outflow_rate > 0
+        ORDER BY peak_outflow_rate DESC LIMIT 15
+    """,
+    "Q2: Top 10 stations share of total rebalancing cost": """
+        SELECT ROUND(SUM(rebalancing_cost), 0) as top10_cost,
+               ROUND(SUM(rebalancing_cost) /
+                   (SELECT SUM(rebalancing_cost) FROM station_summary) * 100, 1) as pct_of_total
+        FROM (SELECT rebalancing_cost FROM station_summary
+              ORDER BY rebalancing_cost DESC LIMIT 10)
+    """,
+    "Q3: Member vs casual split at high-outflow stations": """
+        SELECT start_station_name, total_trips,
+               ROUND(member_trips * 100.0 / total_trips, 1) as member_pct,
+               ROUND(peak_outflow_rate * 100, 1) as outflow_pct
+        FROM station_summary
+        WHERE peak_outflow_rate > 0.5 AND total_trips > 20000
+        ORDER BY peak_outflow_rate DESC
+    """,
+    "Q4: Casual rider revenue opportunity at top 5 stations": """
+        SELECT start_station_name, total_trips, casual_trips,
+               ROUND(peak_outflow_rate * 100, 1) as outflow_pct,
+               ROUND(casual_trips * 0.15 * 4.99, 0) as casual_revenue_opportunity_usd
+        FROM station_summary
+        WHERE peak_outflow_rate > 0 AND total_trips > 20000
+        ORDER BY peak_outflow_rate DESC LIMIT 5
+    """,
+    "Q5: System-wide rebalancing cost (6-month and annualized)": """
+        SELECT ROUND(SUM(rebalancing_cost), 0) as sixmonth_cost,
+               ROUND(SUM(rebalancing_cost) * 2, 0) as annualized_cost
+        FROM station_summary
+    """
+}
+
+print("\n── BUSINESS QUERY RESULTS ───────────────────────────────────────────────")
+for title, query in queries.items():
+    print(f"\n=== {title} ===")
+    print(pd.read_sql(query, conn).to_string(index=False))
+
+conn.close()
 print("\n=== DONE ===")
-print("Next step: load citibike_station_summary.csv into Tableau or Power BI for the dashboard.")
+print("Outputs: citibike_station_summary.csv, citibike_problem_stations.csv, citibike.db, citibike_analysis_charts.png")
