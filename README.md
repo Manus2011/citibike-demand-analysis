@@ -28,7 +28,8 @@ Pre-position bikes at high-outflow residential stations before 7am on weekdays. 
 - `citibike_problem_stations.csv` — 15 high-priority stations
 
 ## Dashboard
-[Tableau Public link — add after publishing]
+<img width="998" height="808" alt="image" src="https://github.com/user-attachments/assets/0b619df8-bbc5-4b0b-9201-7e3114037f4e" />
+
 
 ## Methodology
 **Outflow rate** = (peak departures − peak arrivals) / peak departures during 7–9am weekdays
