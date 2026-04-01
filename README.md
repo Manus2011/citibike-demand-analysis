@@ -11,6 +11,9 @@ Which Citibike stations have demand consistently exceeding supply during morning
 - Average member concentration at problem stations: 87% — demand is predictable and pre-positioning is viable
 - Estimated $28M annualized system-wide rebalancing cost based on NACTO $2.10/bike benchmark
 
+## Dashboard Preview
+![Citibike Analysis](citibike_analysis_charts.png)
+
 ## Recommendation
 Pre-position bikes at high-outflow residential stations before 7am on weekdays. Proactive rebalancing is cheaper and more effective than reactive truck dispatch.
 
@@ -20,9 +23,8 @@ Pre-position bikes at high-outflow residential stations before 7am on weekdays. 
 - Tableau — dashboard visualization
 
 ## Files
-- `citibike_analysis.py` — main analysis pipeline
-- `run_sql.py` — 5 business queries against SQLite database
-- `load_db.py` — loads CSVs into SQLite
+## Files
+- `citibike_analysis.py` — end-to-end pipeline: loads data, cleans, analyzes, builds SQLite DB, runs 5 business queries, exports CSVs and charts
 - `citibike_station_summary.csv` — 2,169 stations with outflow metrics
 - `citibike_problem_stations.csv` — 15 high-priority stations
 
